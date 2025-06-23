@@ -1,11 +1,19 @@
+from __future__ import annotations
+
 import asyncio
 import base64
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
+
+from playwright.async_api import Page
 
 from ..types.agent import (
     ActionExecutionResult,
     AgentAction,
 )
+
+if TYPE_CHECKING:
+    from ..logging import StagehandLogger
+    from ..main import Stagehand
 
 
 class StagehandFunctionName:
@@ -17,9 +25,9 @@ class CUAHandler:  # Computer Use Agent Handler
 
     def __init__(
         self,
-        stagehand,
-        page,
-        logger,
+        stagehand: Stagehand,
+        page: Page,
+        logger: StagehandLogger,
     ):
         self.stagehand = stagehand
         self.logger = logger
@@ -48,10 +56,9 @@ class CUAHandler:  # Computer Use Agent Handler
                 f"No specific action model found for action type {action_type}",
                 category=StagehandFunctionName.AGENT,
             )
-            return {
-                "success": False,
-                "error": f"No specific action model for {action_type}",
-            }
+            return ActionExecutionResult(
+                success=False, error=f"No specific action model for {action_type}"
+            )
 
         try:
             # Store initial URL to detect navigation
@@ -73,7 +80,7 @@ class CUAHandler:  # Computer Use Agent Handler
 
                 # Check for page navigation
                 await self.handle_page_navigation("click", initial_url)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "double_click":
                 # specific_action_model is e.g. DoubleClickAction
@@ -87,7 +94,7 @@ class CUAHandler:  # Computer Use Agent Handler
 
                 # Check for page navigation
                 await self.handle_page_navigation("double_click", initial_url)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "type":
                 # specific_action_model is TypeAction
@@ -115,7 +122,7 @@ class CUAHandler:  # Computer Use Agent Handler
                     await self.page.keyboard.press("Enter")
                     await self.handle_page_navigation("type", initial_url)
 
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "keypress":
                 # specific_action_model is KeyPressAction
@@ -127,7 +134,7 @@ class CUAHandler:  # Computer Use Agent Handler
 
                 # Check for page navigation - keys like Enter can cause navigation
                 await self.handle_page_navigation("keypress", initial_url)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "scroll":
                 # specific_action_model is ScrollAction
@@ -136,7 +143,7 @@ class CUAHandler:  # Computer Use Agent Handler
                 scroll_y = getattr(specific_action_model, "scroll_y", 0)
                 await self.page.mouse.move(x, y)
                 await self.page.mouse.wheel(scroll_x, scroll_y)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "function":
                 # specific_action_model is FunctionAction
@@ -144,16 +151,18 @@ class CUAHandler:  # Computer Use Agent Handler
                 args = getattr(specific_action_model, "arguments", {})
                 if name == "goto" and args.url:
                     await self.page.goto(args.url)
-                    return {"success": True}
+                    return ActionExecutionResult(success=True)
                 elif name == "navigate_back":
                     await self.page.go_back()
-                    return {"success": True}
+                    return ActionExecutionResult(success=True)
                 # Add other function calls like back, forward, reload if needed, similar to TS version
                 self.logger.error(
                     f"Unsupported function call: {name}",
                     category=StagehandFunctionName.AGENT,
                 )
-                return {"success": False, "error": f"Unsupported function: {name}"}
+                return ActionExecutionResult(
+                    success=False, error=f"Unsupported function: {name}"
+                )
 
             elif (
                 action_type == "key"
@@ -172,44 +181,43 @@ class CUAHandler:  # Computer Use Agent Handler
 
                 # Check for page navigation - Enter and other keys may navigate
                 await self.handle_page_navigation("key", initial_url)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "wait":
                 await asyncio.gather(
                     asyncio.sleep(specific_action_model.miliseconds / 1000),
                     self.inject_cursor(),
                 )
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "move":
                 x, y = specific_action_model.x, specific_action_model.y
                 await self._update_cursor_position(x, y)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "screenshot":
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             elif action_type == "goto":
                 await self.page.goto(specific_action_model.url)
                 await self.handle_page_navigation("goto", initial_url)
-                return {"success": True}
+                return ActionExecutionResult(success=True)
 
             else:
                 self.logger.error(
                     f"Unsupported action type: {action_type}",
                     category=StagehandFunctionName.AGENT,
                 )
-                return {
-                    "success": False,
-                    "error": f"Unsupported action type: {action_type}",
-                }
+                return ActionExecutionResult(
+                    success=False, error=f"Unsupported action type: {action_type}"
+                )
 
         except Exception as e:
             self.logger.error(
                 f"Error executing action {action_type}: {e}",
                 category=StagehandFunctionName.AGENT,
             )
-            return {"success": False, "error": str(e)}
+            return ActionExecutionResult(success=False, error=str(e))
 
     async def inject_cursor(self) -> None:
         """Inject a cursor element into the page for visual feedback by calling the JS function."""
@@ -251,7 +259,7 @@ class CUAHandler:  # Computer Use Agent Handler
                 category=StagehandFunctionName.AGENT,
             )
 
-    async def _wait_for_settled_dom(self, timeout_ms: Optional[int] = None) -> None:
+    async def _wait_for_settled_dom(self, timeout_ms: int | None) -> None:
         timeout = (
             timeout_ms if timeout_ms is not None else 10000
         )  # Default to 10s, can be configured via stagehand options
@@ -285,8 +293,8 @@ class CUAHandler:  # Computer Use Agent Handler
             )  # {requestId: {url: string, start: float}}
             doc_by_frame: dict[str, str] = {}  # {frameId: requestId}
 
-            quiet_timer_handle: Optional[asyncio.TimerHandle] = None
-            stalled_request_sweep_task: Optional[asyncio.Task] = None
+            quiet_timer_handle: asyncio.TimerHandle | None = None
+            stalled_request_sweep_task: asyncio.Task | None = None
 
             # Helper to clear quiet timer
             def clear_quiet_timer():

@@ -137,7 +137,7 @@ class AgentResult(BaseModel):
 
 class ActionExecutionResult(BaseModel):
     success: bool
-    error: Optional[str]
+    error: Optional[str] = None
 
 
 class AgentClientOptions(BaseModel):

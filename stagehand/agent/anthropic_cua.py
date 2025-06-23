@@ -327,6 +327,10 @@ class AnthropicCUAClient(AgentClient):
             agent_action
         )  # Task is complete if no tool_use blocks
 
+        # If tool use has no reasoning we'll use the model text.
+        if agent_action and not agent_action.reasoning:
+            agent_action.reasoning = model_message_text
+
         return (
             agent_action,
             model_message_text,
@@ -608,7 +612,7 @@ class AnthropicCUAClient(AgentClient):
         current_url: Optional[str],
     ) -> list[dict[str, Any]]:
         content_for_tool_result: list[dict[str, Any]] = []
-        is_error_result = not action_result.get("success", False)
+        is_error_result = not action_result.success
 
         if tool_name == "computer":
             if (
@@ -629,14 +633,14 @@ class AnthropicCUAClient(AgentClient):
                 )
 
             if is_error_result:
-                error_msg = action_result.get("error", "Unknown error")
+                error_msg = action_result.error or "Unknown error"
                 content_for_tool_result.append(
                     {"type": "text", "text": f"Error: {error_msg}"}
                 )
 
         else:  # For other tools, if any
             if is_error_result:
-                error_msg = action_result.get("error", "Unknown error")
+                error_msg = action_result.error or "Unknown error"
                 content_for_tool_result.append(
                     {
                         "type": "text",
