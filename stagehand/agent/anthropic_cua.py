@@ -222,6 +222,9 @@ class AnthropicCUAClient(AgentClient):
                     await self.handler.get_screenshot_base64()
                 )
 
+                if options.on_action:
+                    await options.on_action(agent_action, action_result)
+
                 current_page_url_after_action = None
                 if self.handler.page:
                     current_page_url_after_action = self.handler.page.url

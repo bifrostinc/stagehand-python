@@ -426,6 +426,8 @@ class OpenAICUAClient(AgentClient):
                     await self.handler.perform_action(agent_action)
                 )
                 current_screenshot_b64 = await self.handler.get_screenshot_base64()
+                if options.on_action:
+                    await options.on_action(agent_action, action_result)
 
                 # Determine call_id and type from last_openai_tool_calls
                 # This part assumes last_openai_tool_calls was set correctly in _process_provider_response

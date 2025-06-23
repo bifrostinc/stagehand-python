@@ -1,4 +1,5 @@
-from typing import Any, Literal, Optional, Union
+from collections.abc import Awaitable
+from typing import Any, Callable, Literal, Optional, Union
 
 from pydantic import BaseModel, RootModel
 
@@ -173,6 +174,9 @@ class AgentExecuteOptions(BaseModel):
     auto_screenshot: Optional[bool] = True
     wait_between_actions: Optional[int] = 1000
     context: Optional[str] = None
+
+    # Callbacks
+    on_action: Optional[Callable[[AgentAction, ActionExecutionResult], Awaitable[None]]]
 
 
 class EnvState(BaseModel):
